@@ -1,0 +1,28 @@
+{
+  "name": "server-manager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yibuyisheng/server-manager.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yibuyisheng/server-manager/issues"
+  },
+  "homepage": "https://github.com/yibuyisheng/server-manager",
+  "devDependencies": {
+    "gulp": "^3.8.11",
+    "gulp-babel": "^5.1.0"
+  },
+  "dependencies": {
+    "socket.io": "^1.3.5",
+    "socket.io-client": "^1.3.5",
+    "utilities": "git://github.com/yibuyisheng/utilities"
+  }
+}
