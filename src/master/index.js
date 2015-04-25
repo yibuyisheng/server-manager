@@ -1,5 +1,7 @@
 import io from 'socket.io';
 import utils from 'utilities';
+import Promise from 'promise';
+import request from '../common/request';
 
 let server = io();
 
@@ -8,17 +10,12 @@ server.of('/control').on('connection', function (socket) {
     socket.emit('init-done');
 
     socket.on('command', function (data) {
-        data = JSON.parse(data);
-        dealer.dispatchCommand(data.command, data.ip, data.cmdId, socket);
+        dealer.dispatchCommand(data, socket);
     });
 });
 
 server.of('/node').on('connection', function(socket) {
     dealer.nodes.push(socket);
-
-    socket.on('command-done', (data) => {
-        dealer.commandDone(data, socket);
-    });
 });
 
 server.listen(8008, function () {
@@ -29,44 +26,47 @@ let dealer = utils.base.extend({
     controls: [],
     nodes: [],
     cmdIdControlMap: {},
-    dispatchCommand: function(command, ipRegExp, cmdId, socket) {
-        this.cmdIdControlMap[cmdId] = {controlSocket: socket, nodeCount: 0, completeCount: 0, result: {}};
-        this.nodes.forEach((nodeSocket) => {
+    dispatchCommand: function(data, controlSocket) {
+        let promises = this.nodes.map((nodeSocket) => {
             let ip = this._getRemoteAddressFromSocket(nodeSocket);
-            if (new RegExp(ipRegExp).test(ip)) {
-                this.cmdIdControlMap[cmdId].nodeCount++;
-
-                nodeSocket.emit('command', {
-                    command: command,
-                    cmdId: cmdId
+            if (new RegExp(data.data.ip)) {
+                return request(nodeSocket, 'command', {
+                    command: data.data.command
+                }).then((result) => {
+                    result.ip = this._getRemoteAddressFromSocket(nodeSocket)
+                    return result;
                 });
             }
+        }).filter(function(p) {
+            return p;
         });
 
-        if (!this.cmdIdControlMap[cmdId].nodeCount) {
-            this.cmdIdControlMap[cmdId] = null;
-            socket.emit('command-done', {
-                message: 'can not find node to execute this command!',
-                cmdId: cmdId
-            });
-        }
-    },
-    commandDone: function(data, nodeSocket) {
-        let item = this.cmdIdControlMap[data.cmdId];
-        if (!item) return;
-
-        item.completeCount++;
-        item.result[this._getRemoteAddressFromSocket(nodeSocket)] = data;
-
-        // 所有节点服务器都执行完了命令
-        if (item.nodeCount === item.completeCount) {
-            item.controlSocket.emit('command-done', {
-                result: item.result,
-                cmdId: data.cmdId
+        if (promises.length) {
+            Promise.all.apply(Promise, promises)
+                .then(function(results) {
+                    controlSocket.emit('command-done', {
+                        data: results,
+                        requestId: data.requestId
+                    });
+                })
+                .catch(function(error) {
+                    controlSocket.emit('command-done', {
+                        data: {
+                            message: error.message
+                        },
+                        requestId: data.requestId
+                    });
+                });
+        } else {
+            controlSocket.emit('command-done', {
+                data: {
+                    message: 'can not find node'
+                },
+                requestId: data.requestId
             });
         }
     },
     _getRemoteAddressFromSocket: function(socket) {
-        return socket.conn.remoteAddress.slice(6);
+        return socket.conn.remoteAddress.slice(7);
     }
 }, utils.eventDealer);

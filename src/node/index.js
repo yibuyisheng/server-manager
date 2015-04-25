@@ -5,18 +5,26 @@ let socket = io.connect('http://localhost:8008/node');
 
 socket.on('command', function(data) {
     try {
-        exec(data.command, function(error, stdout, stderr) {
+        console.log(data);
+        exec(data.data.command, function(error, stdout, stderr) {
+            console.log(error);
+            console.log(stdout);
+            console.log(stderr);
             socket.emit('command-done', {
-                errorMessage: error && error.message,
-                stdout: String(stdout),
-                stderr: String(stderr),
-                cmdId: data.cmdId
+                data: {
+                    errorMessage: error && error.message,
+                    stdout: String(stdout),
+                    stderr: String(stderr)
+                },
+                requestId: data.requestId
             });
         });
     } catch(error) {
         socket.emit('command-done', {
-            errorMessage: error.message,
-            cmdId: data.cmdId
+            data: {
+                errorMessage: error.message
+            },
+            requestId: data.requestId
         });
     }
 

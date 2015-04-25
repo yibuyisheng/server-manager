@@ -1,6 +1,7 @@
 import io from 'socket.io-client';
 import repl from 'repl';
 import utils from 'utilities';
+import request from '../common/request';
 
 let socket = io.connect('http://localhost:8008/control');
 
@@ -8,15 +9,14 @@ socket.on('connect', function() {});
 socket.on('init-done', function() {
     dealer.startRepl();
     dealer.on('command', (cmdData) => {
-        socket.emit('command', JSON.stringify(cmdData));
+        request(socket, 'command', cmdData.data)
+            .then((data) => {
+                cmdData.callback(null, dealer.commandDone(data));
+            });
     });
-});
-socket.on('command-done', function(data) {
-    dealer.commandDone(data, data.cmdId);
 });
 
 let dealer = utils.base.extend({
-    _evalCallbacks: {},
     startRepl: function() {
         let _this = this;
         repl.start({
@@ -24,34 +24,30 @@ let dealer = utils.base.extend({
             input: process.stdin,
             output: process.stdout,
             eval: function evalFn(cmd, context, filename, callback) {
-                if (_this._evalCallback) {
-                    return callback(null, '当前有命令正在执行，请等待执行完成！');
-                }
-
-                let cmdId = _this._generateCommandId();
-                _this._evalCallbacks[cmdId] = callback;
                 _this.trigger('command', {
-                    command: cmd.replace(/\n/g, ''),
-                    ip: '',
-                    cmdId: cmdId
+                    data: {
+                        command: cmd.replace(/\n/g, ''),
+                        ip: ''
+                    },
+                    callback: callback
                 });
+            },
+            writer: function(message) {
+                return message;
             }
         });
     },
-    commandDone: function(data, cmdId) {
-        let cb = this._evalCallbacks[cmdId];
-        if (!(cb instanceof Function)) return;
-
+    commandDone: function(data) {
         let message = [];
-        if (data.errorMessage) {
-            message = message.push(data.errorMessage);
-        } else if (data.result) {
-            for (let k in data.result) {
-                message.push(k + '\n' + (data.result[k].errorMessage || data.result[k].stderr || data.result[k].stdout));
-            }
+        if (utils.base.isArray(data)) {
+            message.push(data.map(function(result) {
+                return result.ip + '\n' + (result.errorMessage || result.stderr || result.stdout);
+            }).join('\n'));
+        } else if (data.errorMessage) {
+            message.push(data.errorMessage);
         }
-        cb(null, message.join('\n'));
-        this._evalCallbacks[cmdId] = null;
+
+        return message.join('\n\n');
     },
     _generateCommandId: function() {
         this._uid = this._uid || 0;

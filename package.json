@@ -21,6 +21,7 @@
     "gulp-babel": "^5.1.0"
   },
   "dependencies": {
+    "promise": "git://github.com/yibuyisheng/promise",
     "socket.io": "^1.3.5",
     "socket.io-client": "^1.3.5",
     "utilities": "git://github.com/yibuyisheng/utilities"
